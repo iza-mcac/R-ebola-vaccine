@@ -1,0 +1,96 @@
+---
+title: "1.Exploring_processed_data"
+author: "Izabela Mamede"
+date: "2025-11-30"
+output: html_document
+---
+
+Load the dataset
+```{r}
+Exp_results<- read_rds("Exp_results.rds")
+```
+
+The counts tables
+```{r}
+Exp_results$count_tables_converted$geneva_b1
+
+Exp_results$count_tables_converted$geneva_b2
+
+Exp_results$count_tables_converted$usa
+
+Exp_results$count_tables_converted$vebcon
+```
+
+
+The metadata for each cohort
+```{r}
+Exp_results$metadata$geneva_b1
+
+Exp_results$metadata$geneva_b2
+
+Exp_results$metadata$usa
+
+Exp_results$metadata$vebcon
+
+```
+
+
+The differential expression tables
+```{r}
+Exp_results$DEGs_all$geneva_b1
+
+Exp_results$DEGs_all$geneva_b2
+
+Exp_results$DEGs_all$usa
+
+Exp_results$DEGs_all$vebcon
+```
+
+A full DE table with all the DE tables bound
+```{r}
+Exp_results$DEGs_converted
+
+```
+
+The differential expression tables
+```{r}
+Exp_results$DEGs_all$geneva_b1
+
+Exp_results$DEGs_all$geneva_b2
+
+Exp_results$DEGs_all$usa
+
+Exp_results$DEGs_all$vebcon
+```
+
+The correlation against all the genes in that cohort
+```{r}
+Exp_results$correlation$geneva_b1
+
+Exp_results$correlation$geneva_b2
+
+Exp_results$correlation$usa
+
+Exp_results$correlation$vebcon
+```
+
+The functional enrichment results
+```{r}
+Exp_results$enrichment
+
+```
+The metacorrelation results against the genes and the antibodies
+```{r}
+Exp_results$metafor_all_cohorts$genes_lncRNA
+
+Exp_results$metafor_all_cohorts$antibody_lncRNA
+
+
+Exp_results$metafor_all_cohorts$antibody_lncRNA
+
+  
+```
+
+
+
+
