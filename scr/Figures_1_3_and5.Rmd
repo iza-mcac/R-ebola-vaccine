@@ -1,0 +1,261 @@
+---
+title: "Figures_iza"
+author: "Iza"
+date: "2024-12-13"
+output: html_document
+---
+
+Read deg results
+
+Packages
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+Load
+```{r}
+Degs_all_rds<-readRDS("Thomaz_DEGs/intermediate/DEGs_all_datasets_converted.RDS")
+DEAnalysis<-readRDS("Thomaz_DEGs/intermediate/DEAnalysis.RDS")
+
+DEAnalysis$ds_list$geneva_b2
+
+```
+
+Barplot generla subtypes genes and lncRNAs
+```{r}
+Degs_all_rds %>%
+  filter(gene_type %in% c("lncRNA","protein_coding")) %>%
+  ggplot(aes(x=contrast,fill=gene_type)) + 
+  geom_bar()+
+  facet_wrap(~dataset)+
+  theme_bw()
+
+
+Degs_all_rds %>%
+  filter(gene_type %in% c("lncRNA", "protein_coding")) %>%
+  mutate(direction = ifelse(logFC > 0, "Up", "Down")) %>%  
+  group_by(contrast, dataset, gene_type, direction) %>%    
+  summarise(count = n()) %>%                               
+  ungroup() %>%
+  mutate(count = ifelse(direction == "Down", -count, count)) %>% 
+  ggplot(aes(x = contrast, y = count, fill = gene_type)) +
+  geom_bar(stat = "identity", position = "stack") +        
+  facet_wrap(~dataset) +                                   
+  theme_bw() +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") + 
+  labs(y = "", x = "", fill = "") +
+  scale_y_continuous(labels = abs)+
+  scale_fill_manual(values = c("darkred", "grey"))
+
+cowplot::ggsave2("iza_plots/Barplot_counts_types_onconsortia.pdf", height = 6, width = 7)
+
+```
+
+Upsetplot
+
+Filter lncRNA first
+```{r}
+
+Degs_all_lncRNA<-Degs_all_rds %>% filter(gene_type == "lncRNA")
+
+selected_lncRNA <- c("LINC00487", "C8orf31", "SERPINB9P1", "LEF1-AS1", "CYTOR", "ATP6V0E2-AS1", "DLEU2", "FOXN3-AS1", "LINC00189", "DOCK8-AS1", "FAM225A")
+
+Degs_all_lncRNA_sel<-Degs_all_lncRNA %>% filter(genes %in% selected_lncRNA)
+
+data_long <- Degs_all_lncRNA_sel %>%
+  select(genes, logFC, contrast, dataset) %>%
+  spread(key = contrast, value = logFC)
+
+ggplot(Degs_all_lncRNA_sel, aes(x = contrast, y = genes, fill = logFC)) +
+  geom_tile(col = "grey8") +
+  facet_wrap(~ dataset, scales = 'free', ncol = 4) +
+  scale_fill_gradient2(low = "#2166AC", mid = "#F7F7F7", high = "#B2182B", midpoint = 0) +  
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "", x = "", y = "")
+
+cowplot::ggsave2("iza_plots/Heatmap_selectedlncRNA_fig1D_new.pdf", height = 5, width = 12)
+
+```
+
+Make upsetplot figure S1A
+```{r}
+Degs_all_d1vd0<-Degs_all_rds %>% filter(contrast == "d1_vs_d0" &PValue < 0.05 &gene_type == "lncRNA" & abs(logFC) > 1)
+
+Degs_all_d1vd0_geneb1<-Degs_all_d1vd0 %>% filter(dataset == "geneva_b1")
+Degs_all_d1vd0_geneb2<-Degs_all_d1vd0 %>% filter(dataset == "geneva_b2")
+Degs_all_d1vd0_usa<-Degs_all_d1vd0 %>% filter(dataset == "usa")
+Degs_all_d1vd0_vebcon<-Degs_all_d1vd0 %>% filter(dataset == "vebcon")
+
+listtoupset<-list(geneva_b1 = Degs_all_d1vd0_geneb1$genes,
+     geneva_b2 = Degs_all_d1vd0_geneb2$genes,
+     usa = Degs_all_d1vd0_usa$genes,
+     vebcon = Degs_all_d1vd0_vebcon$genes
+     )
+
+library(ComplexHeatmap)
+
+matrix_toupset <- make_comb_mat(listtoupset, mode  = "distinct")
+
+UpSet(matrix_toupset, comb_order = order(comb_size(matrix_toupset)))
+
+```
+
+Trying to do a LEF-AS1 LEF analysis
+```{r}
+Degs_teste<- DEAnalysis
+
+geneva_b1_counts<-Degs_teste$ds_list$geneva_b1$norm_data %>%
+  as.data.frame() %>%
+  rownames_to_column()
+
+geneva_b2_counts<-Degs_teste$ds_list$geneva_b2$norm_data %>%
+  as.data.frame() %>%
+  rownames_to_column()
+
+usa_counts<-Degs_teste$ds_list$usa$norm_data %>%
+  as.data.frame() %>%
+  rownames_to_column()
+
+vebcon_counts<-Degs_teste$ds_list$vebcon$norm_data %>%
+  as.data.frame() %>%
+  rownames_to_column()
+
+## filter lef & LEf_as1
+
+View(table(geneva_b1_counts$rowname))
+
+geneva_b1_LEF1<-geneva_b1_counts %>% filter(rowname %in% c("LEF1", "LEF1-AS1")) %>%
+  column_to_rownames() %>% t() %>%as.data.frame()
+
+geneva_b2_LEF1<-geneva_b2_counts %>% filter(rowname %in% c("LEF1", "LEF1-AS1"))%>%
+  column_to_rownames() %>% t() %>%as.data.frame()
+
+usa_LEF1 <- usa_counts %>% filter(rowname %in% c("LEF1", "LEF1-AS1"))%>%
+  column_to_rownames() %>% t() %>%as.data.frame()
+
+vebcon_LEF1<-vebcon_counts %>% filter(rowname %in% c("LEF1", "LEF1-AS1"))%>%
+  column_to_rownames() %>% t() %>%as.data.frame()
+```
+
+Fix table to have by day and coorte
+
+```{r}
+geneva_b1_LEF1 <- geneva_b1_LEF1 %>%
+  rownames_to_column("Sample") %>%  
+  mutate(day = case_when(
+    grepl("_D0", Sample) ~ "D0",
+    grepl("_D1", Sample) ~ "D1",
+    grepl("_D3", Sample) ~ "D3",
+    grepl("_D7", Sample) ~ "D7",
+    TRUE ~ "Unknown"  
+  )) %>%
+  mutate(dataset = "EBOVAC-B1") %>%  
+  column_to_rownames("Sample")
+
+geneva_b2_LEF1 <- geneva_b2_LEF1 %>%
+  rownames_to_column("Sample") %>%  
+  mutate(day = case_when(
+    grepl("_D0", Sample) ~ "D0",
+    grepl("_D1", Sample) ~ "D1",
+    grepl("_D3", Sample) ~ "D3",
+    grepl("_D7", Sample) ~ "D7",
+    TRUE ~ "Unknown"  
+  )) %>%
+  mutate(dataset = "EBOVAC-B2") %>%  
+  column_to_rownames("Sample")
+
+usa_LEF1 <- usa_LEF1 %>%
+  rownames_to_column("Sample") %>%  
+  mutate(day = case_when(
+    grepl("_D0", Sample) ~ "D0",
+    grepl("_D1", Sample) ~ "D1",
+    grepl("_D2", Sample) ~ "D2",
+    grepl("_D3", Sample) ~ "D3",
+    grepl("_D7", Sample) ~ "D7",
+    TRUE ~ "Unknown"  
+  )) %>%
+  mutate(dataset = "EBOPLUS") %>%  
+  column_to_rownames("Sample")
+
+vebcon_LEF1 <- vebcon_LEF1 %>%
+  rownames_to_column("Sample") %>%  
+  mutate(day = case_when(
+    grepl("_d0", Sample) ~ "D0",
+    grepl("_d1", Sample) ~ "D1",
+    grepl("_d3", Sample) ~ "D3",
+    grepl("_d7", Sample) ~ "D7",
+    TRUE ~ "Unknown"  
+  )) %>%
+  mutate(dataset = "VEBCON") %>%  
+  column_to_rownames("Sample")
+
+all_LEF1_samples<-rbind(geneva_b1_LEF1, geneva_b2_LEF1, usa_LEF1, vebcon_LEF1)
+
+```
+
+
+Correlation
+```{r}
+library(Hmisc)
+genevab1_cor_res <-rcorr(geneva_b1_LEF1$LEF1, geneva_b1_LEF1$`LEF1-AS1`, type = "spearman")
+genevab2_cor_res <-rcorr(geneva_b2_LEF1$LEF1, geneva_b2_LEF1$`LEF1-AS1`, type = "spearman")
+usa_cor_res <-rcorr(usa_LEF1$LEF1, usa_LEF1$`LEF1-AS1`, type = "spearman")
+vebcon_cor_res <-rcorr(vebcon_LEF1$LEF1, vebcon_LEF1$`LEF1-AS1`, type = "spearman")
+
+# Prepare data for plotting
+cor_matrix <- test_res$r
+melted_cor <- melt(cor_matrix)
+
+all_LEF1_samples$dataset<- factor(all_LEF1_samples$dataset, levels = c("EBOVAC-B1", "EBOVAC-B2", "EBOPLUS", "VEBCON"))
+
+# Create the dotplot
+all_LEF1_samples %>%
+  filter(day != "D2") %>%
+  ggplot(aes(x = log2(`LEF1-AS1`), y = log2(LEF1))) +
+  geom_point(aes(col = dataset)) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() +
+  facet_wrap(~day, ncol = 1)
+
+
+cowplot::ggsave2("iza_figures/Corrplot_all_LEF_LEF-AS1_log.pdf", height = 8, width = 4)
+
+```
+
+Try a line plot/ridge
+```{r}
+library(ggridges)
+all_LEF1_samples_long <-all_LEF1_samples %>%pivot_longer(names_to = "gene", values_to = "counts", cols = c("LEF1", "LEF1-AS1"))
+
+all_LEF1_samples_long %>%
+  ggplot(aes(x = day, y = counts)) +
+  geom_point(aes(col = dataset),alpha = 0.8) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/Dotplot_all_LEF_LEF-AS1.pdf", height = 5, width = 4)
+
+
+all_LEF1_samples_long %>%
+  ggplot(aes(x = day, y = counts)) +
+  geom_violin(alpha = 0.8) +
+  geom_jitter(aes(col = dataset), alpha = 0.4)+
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/Vln_all_LEF_LEF-AS1.pdf", height = 5, width = 4)
+
+all_LEF1_samples_long %>%
+  ggplot(aes(x = day, y = counts)) +
+  geom_boxplot(alpha = 0.8) +
+  #geom_jitter(aes(col = dataset), alpha = 0.4)+
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/Boxplot_all_LEF_LEF-AS1_nocolors.pdf", height = 5, width = 4)
+
+```
+

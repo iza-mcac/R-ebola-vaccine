@@ -1,0 +1,165 @@
+---
+title: "Correlation_all"
+author: "Iza"
+date: "2025-12-02"
+output: html_document
+---
+
+```{r}
+Degs_all_rds<-readRDS("Thomaz_DEGs/intermediate/DEGs_all_datasets_converted.RDS")
+DEAnalysis<-readRDS("Thomaz_DEGs/intermediate/DEAnalysis.RDS")
+
+```
+
+Find the correlations
+```{r}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(tibble)
+  library(AnnotationDbi)
+  library(org.Hs.eg.db)
+})
+
+
+selected_lncRNA <- c(
+  "LINC00487", "C8orf31", "SERPINB9P1", "LEF1-AS1", "CYTOR",
+  "ATP6V0E2-AS1", "DLEU2", "FOXN3-AS1", "LINC00189",
+  "DOCK8-AS1", "FAM225A"
+)
+
+convert_vebcon_to_symbols <- function(cpm_mat) {
+  ens_ids_raw <- rownames(cpm_mat)
+  ens_ids <- sub("\\.\\d+$", "", ens_ids_raw)
+
+  annot <- AnnotationDbi::select(
+    org.Hs.eg.db,
+    keys     = ens_ids,
+    keytype  = "ENSEMBL",
+    columns  = "SYMBOL"
+  )
+
+  annot <- annot[!is.na(annot$SYMBOL), ]
+  annot <- annot[!duplicated(annot$ENSEMBL), ]
+
+  common_ens <- intersect(ens_ids, annot$ENSEMBL)
+  cpm_sub    <- cpm_mat[match(common_ens, ens_ids_raw), , drop = FALSE]
+
+  rownames(cpm_sub) <- annot$SYMBOL[match(common_ens, annot$ENSEMBL)]
+
+  cpm_sym <- rowsum(as.matrix(cpm_sub), group = rownames(cpm_sub))
+
+  cpm_sym
+}
+
+cohorts <- c("geneva_b1", "geneva_b2", "usa", "vebcon")
+corr_list <- list()
+
+for (cohort in cohorts) {
+  message("Processing cohort: ", cohort)
+
+  cpm <- DEAnalysis$cpm_tables[[cohort]]
+
+  if (cohort == "vebcon") {
+    cpm <- convert_vebcon_to_symbols(cpm)
+  }
+
+  sample_days <- sub(".*_([Dd][0-9]+)$", "\\1", colnames(cpm))
+  sample_days <- toupper(sample_days) 
+
+  unique_days <- unique(sample_days)
+
+  for (day in unique_days) {
+    cols_day <- which(sample_days == day)
+    if (length(cols_day) < 3) {
+      message("  Skipping ", cohort, " ", day, " (n<3 samples)")
+      next
+    }
+
+    cpm_day   <- cpm[, cols_day, drop = FALSE]
+    logcpm    <- log2(cpm_day + 1)
+
+    lnc_genes <- intersect(selected_lncRNA, rownames(logcpm))
+    if (length(lnc_genes) == 0) {
+      message("  No selected lncRNAs in ", cohort, " ", day, " -> skipping")
+      next
+    }
+
+    pc_genes  <- setdiff(rownames(logcpm), lnc_genes)
+
+    logcpm_lnc <- logcpm[lnc_genes, , drop = FALSE]
+    logcpm_pc  <- logcpm[pc_genes,  , drop = FALSE]
+
+    cor_mat <- cor(
+      t(logcpm_lnc),
+      t(logcpm_pc),
+      method = "spearman",
+      use    = "pairwise.complete.obs"
+    )
+
+    n <- ncol(logcpm)    # number of samples for this day
+    if (n <= 2) next
+
+    r     <- cor_mat
+    tstat <- r * sqrt((n - 2) / pmax(1e-12, 1 - r^2))
+    pval  <- 2 * pt(-abs(tstat), df = n - 2)
+
+    # tidy correlations
+    corr_tbl <- as_tibble(as.data.frame(cor_mat), rownames = "lnc_gene") %>%
+      pivot_longer(
+        cols      = -lnc_gene,
+        names_to  = "pc_gene",
+        values_to = "rho"
+      )
+
+    p_tbl <- as_tibble(as.data.frame(pval), rownames = "lnc_gene") %>%
+      pivot_longer(
+        cols      = -lnc_gene,
+        names_to  = "pc_gene",
+        values_to = "pval"
+      )
+
+    corr_pairs <- corr_tbl %>%
+      left_join(p_tbl, by = c("lnc_gene", "pc_gene")) %>%
+      mutate(
+        pair   = paste(lnc_gene, pc_gene, sep = "_"),
+        cohort = cohort,
+        day    = day
+      ) %>%
+      dplyr::select(cohort, day, lnc_gene, pc_gene, rho, pval, pair)
+
+    corr_list[[paste(cohort, day, sep = "_")]] <- corr_pairs
+  }
+}
+
+corr_by_day_all <- bind_rows(corr_list) %>%
+  arrange(cohort, day, desc(abs(rho)))
+
+
+corr_by_day_all %>% dplyr::glimpse()
+
+```
+
+
+
+Bind all reuslts
+```{r}
+all_corr_pairs<-rbind(corr_pairs_abovac_b1, corr_pairs_abovac_b2, corr_pairs_eboplus, 
+      corr_pairs_vebcon)
+
+all_corr_pairs_pval_lower005<-all_corr_pairs %>%
+  filter(pval < 0.05)
+
+counts_pairs_sig<-as.data.frame(table(all_corr_pairs_pval_lower005$pair))
+```
+
+do a graph from it
+```{r}
+all_corr_pairs_pval_lower005_rho07<-all_corr_pairs_pval_lower005 %>%
+  filter(abs(rho)> 0.4)
+
+counts_corrs<-as.data.frame(table(all_corr_pairs_pval_lower005_rho07$pair))
+
+test_corss_all<-counts_corrs %>% filter(Freq > 3)
+
+```

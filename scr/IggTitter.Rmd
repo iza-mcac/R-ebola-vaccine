@@ -1,0 +1,207 @@
+---
+title: "IggTitter_corr"
+author: "Iza"
+date: "2025-07-31"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(data.table)
+library(tidyverse)
+library(ggplot2)
+library(ggrepel)
+library(metafor)
+library(igraph)
+```
+
+
+```{r}
+#load lncRNA x IgG meta analysis data
+lnc_ab_meta <- fread("RandomEffects_Model_Corr_lncRNAs_IgG_perDay_AllCohorts_v3.csv")
+
+lnc_ab_meta <- lnc_ab_meta %>%
+  dplyr::mutate(sig=ifelse(pval<0.05,yes = "sig",no = "not.sig"),
+         dir=ifelse(beta>0,yes = "positive",no = "negative"),
+         sig_dir=ifelse(sig=="sig" & dir=="positive",
+                        yes = "positive",
+                        no = ifelse(sig=="sig",
+                                    yes = "negative",
+                                    no = "not.sig"))) %>%
+  dplyr::filter(!duplicated(paste0(Gene,day)))
+
+
+lnc_ab_meta %>%
+  dplyr::filter(day!=0) %>%
+  ggplot(aes(x = beta,y = -log(pval),color=sig_dir))+
+  geom_point(size=3)+
+  geom_text_repel(data = lnc_ab_meta %>%
+                    dplyr::filter(day!=0,
+                           sig=="sig"),
+                  aes(label=Gene),nudge_y = 1.2,
+                  size=3,force = 1,color="black")+
+  theme_bw()+
+  geom_hline(yintercept = -log(0.05))+
+  scale_color_manual(values = c("blue","grey","red3"))+
+  facet_wrap(facets = ~day,ncol = 4)
+
+cowplot::ggsave2("Figure3A_new.pdf", height = 4.7, width = 7)
+
+```
+
+selected lncRNA
+```{r}
+
+#Load Geneva antibodies - lncRNA
+geneva_antibody_lncRNA <- readRDS("Corr_analysis/geneva_antibody_lncRNA.RDS")
+USA_antibody_lncRNA <- readRDS("Corr_analysis/USA_antibody_lncRNA.RDS")
+
+geneva <- geneva_antibody_lncRNA %>%
+  dplyr::select(1,2,3,7,5,8)
+
+USA <- USA_antibody_lncRNA %>%
+  dplyr::filter(antibody_type=="Ebola Zaire Virus GP IgG Antibody Titer") %>%
+  dplyr::mutate(batch=3) %>%
+  dplyr::select(1,2,3,5,6,7)
+
+colnames(USA) <- colnames(geneva)
+
+USA_and_geneva <- rbind(USA,geneva)
+
+USA_and_geneva %>%
+  dplyr::filter(lncRNA %in% c("FAM225A"),day==14) %>%
+  ggplot(aes(x=D1_DE,y=log2(IgGTitter+1)))+
+  geom_point()+
+  geom_smooth(method = "lm")+
+  theme_bw()
+
+
+```
+
+Plot all the significant ones
+```{r}
+library(Hmisc)
+library(patchwork)
+
+# Filter significant pairs
+sig_pairs <- lnc_ab_meta %>%
+  filter(sig_dir %in% c("positive", "negative"), day != 0) %>%
+  distinct(Gene, day)
+
+# Generate a list of ggplots
+plot_list <- list()
+
+for (i in seq_len(nrow(sig_pairs))) {
+  gene_i <- sig_pairs$Gene[i]
+  day_i <- sig_pairs$day[i]
+  
+  dat_i <- USA_and_geneva %>%
+    filter(lncRNA == gene_i, day == day_i) %>%
+    mutate(IgG_log = log2(IgGTitter + 1))
+  
+  if (nrow(dat_i) < 3) next
+  
+  rc <- rcorr(dat_i$D1_DE, dat_i$IgG_log, type = "pearson")
+  r_val <- round(rc$r[1, 2], 2)
+  p_val <- signif(rc$P[1, 2], 3)
+  
+  p <- ggplot(dat_i, aes(x = D1_DE, y = IgG_log)) +
+    geom_point(alpha = 0.6) +
+    geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+    labs(
+      title = paste0(gene_i, " | Day ", day_i),
+      subtitle = paste0("r = ", r_val, ", p = ", p_val),
+      x = "lncRNA expression",
+      y = "log2(IgG Titer + 1)"
+    ) +
+    theme_bw(base_size = 10) +
+    theme(
+      plot.title = element_text(face = "bold", size = 10),
+      plot.subtitle = element_text(size = 8)
+    )
+  
+  plot_list[[length(plot_list) + 1]] <- p
+}
+
+# Combine all plots into one panel
+panel_plot <- wrap_plots(plotlist = plot_list, ncol = 5)
+
+# Save and display
+ggsave("Figure3B_lncRNA_IgG_panel.pdf", panel_plot, width = 12, height = ceiling(length(plot_list) / 3) * 1.3)
+
+
+```
+
+SOmthing else
+```{r}
+sig_lncs <- lnc_ab_meta %>%
+  filter(sig == "sig") %>%
+  distinct(Gene) %>%
+  pull()
+
+combined_data <-USA_and_geneva
+
+# Selected lncRNAs
+selected_lncs <- c("FAM225A", "DOCK8-AS1", "LEF1-AS1")
+
+# Load antibody expression data
+# Generate patchwork panels per lncRNA
+lnc_panels <- list()
+
+for (lnc in selected_lncs) {
+  # Days available for this lncRNA
+  lnc_days <- lnc_ab_meta %>%
+    filter(Gene == lnc) %>%
+    arrange(day) %>%
+    pull(day) %>%
+    unique()
+  
+  plot_list <- list()
+  
+  for (d in lnc_days) {
+    df <- combined_data %>%
+      filter(lncRNA == lnc, day == d) %>%
+      mutate(IgG_log = log2(IgGTitter + 1))
+    
+    if (nrow(df) < 3) next
+    
+    rc <- rcorr(df$D1_DE, df$IgG_log)
+    r_val <- round(rc$r[1, 2], 2)
+    p_val <- signif(rc$P[1, 2], 3)
+    
+    p <- ggplot(df, aes(x = D1_DE, y = IgG_log)) +
+      geom_point(alpha = 0.7) +
+      geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+      labs(
+        title = paste0("Day ", d),
+        subtitle = paste0("r = ", r_val, ", p = ", p_val),
+        x = "lncRNA expression",
+        y = "log2(IgG Titer + 1)"
+      ) +
+      theme_bw(base_size = 10) +
+      theme(
+        plot.title = element_text(size = 10, face = "bold"),
+        plot.subtitle = element_text(size = 8)
+      )
+    
+    plot_list[[length(plot_list) + 1]] <- p
+  }
+  
+  if (length(plot_list) > 0) {
+    panel <- wrap_plots(plot_list, nrow = 1) +
+      plot_annotation(title = lnc) &
+      theme(plot.title = element_text(size = 8, face = "bold", hjust = 0.5))
+    
+    lnc_panels[[length(lnc_panels) + 1]] <- panel
+  }
+}
+
+# Final figure
+final_plot <- wrap_plots(lnc_panels, ncol = 1)
+
+# Save to PDF
+ggsave("Figure3B_FAM225A_DOCK8AS1_LEF1AS1_patchwork.pdf", final_plot,
+       width = 15, height = 4 *1.7)
+
+cowplot::ggsave2("Figure3B_test_new.pdf", height = 24, width = 12)
+```

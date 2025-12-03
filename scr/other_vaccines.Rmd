@@ -1,0 +1,225 @@
+---
+title: "other_vaccines"
+author: "Iza"
+date: "2025-02-11"
+output: html_document
+---
+#Dengue
+```{r}
+
+immunespace <- readRDS("immunespace/all_immdata_with_response.rds")
+
+readcount_combined_counts <- read_table("GSE146658/GSE146658_norm_counts_TPM_GRCh38.p13_NCBI.tsv")
+
+gene_metadata <- read_table("GSE146658/Human.GRCh38.p13.annot.tsv")
+
+GSE146658_norm_counts<-readcount_combined_counts %>% left_join(gene_metadata, by = c("GeneID"="GeneID"))
+
+GSE146658_norm_counts_LEf<-GSE146658_norm_counts %>% filter(Symbol %in% c("LEF1", "LEF1-AS1"))
+
+metadata_GSE146658 <-read_csv("ImmuneSpaceR-main/metadata_GSE146658")
+
+GSE146658_norm_counts_LEf_filt<-GSE146658_norm_counts_LEf %>% dplyr::select(2:101)
+
+rownames(GSE146658_norm_counts_LEf_filt) <- GSE146658_norm_counts_LEf$Symbol
+
+GSE146658_norm_counts_LEf_transpose<-as.data.frame(t(GSE146658_norm_counts_LEf_filt))
+
+GSE146658_norm_counts_LEf_transpose<-rownames_to_column(GSE146658_norm_counts_LEf_transpose)
+
+GSE146658_norm_counts_LEf_transpose_meta<-GSE146658_norm_counts_LEf_transpose %>% left_join(metadata_GSE146658, by = c("rowname"="Sample Name"))
+
+```
+
+plotting
+```{r}
+
+GSE146658_norm_counts_LEf_transpose_meta %>%
+  ggplot(aes(x = `LEF1-AS1`, y = LEF1)) +
+  geom_point(aes(col = as.character(Day)),alpha = 0.8) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() #+
+ # facet_wrap(~Day, ncol = 1)
+
+cowplot::ggsave2("iza_figures/GSE146658_Corrplot_all_LEF_LEF-AS1.pdf", height = 5, width = 6)
+
+
+GSE146658_norm_counts_LEf_transpose_meta_long <-GSE146658_norm_counts_LEf_transpose_meta %>%pivot_longer(names_to = "gene", values_to = "counts", cols = c("LEF1", "LEF1-AS1"))
+
+
+
+GSE146658_norm_counts_LEf_transpose_meta_long %>%
+  ggplot(aes(x = as.character(Day), y = counts)) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(aes(), alpha = 0.4)+
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/GSE146658_Boxplot_all_LEF_LEF-AS1_nocolors.pdf", height = 6, width = 4)
+
+```
+
+Influenza
+```{r}
+readcount_combined_counts_influ <- read_table("GSE274606/GSE274606_norm_counts_TPM_GRCh38.p13_NCBI.tsv")
+
+library(readr)
+metadata_274606 <- read_table("GSE274606/metadata_274606", 
+    col_names = FALSE)
+
+metadata_274606 <- metadata_274606 %>%
+  separate(X2, into = c("Part1", "Day", "Part3"), sep = "_")
+
+GSE274606_norm_counts<-readcount_combined_counts_influ %>% left_join(gene_metadata, by = c("GeneID"="GeneID"))
+
+GSE274606_norm_counts_LEf<-GSE274606_norm_counts %>% filter(Symbol %in% c("LEF1", "LEF1-AS1"))
+
+
+GSE274606_norm_counts_LEf_filt<-GSE274606_norm_counts_LEf %>% dplyr::select(2:83)
+
+rownames(GSE274606_norm_counts_LEf_filt) <- GSE274606_norm_counts_LEf$Symbol
+
+GSE274606_norm_counts_LEf_transpose<-as.data.frame(t(GSE274606_norm_counts_LEf_filt))
+
+GSE274606_norm_counts_LEf_transpose<-rownames_to_column(GSE274606_norm_counts_LEf_transpose)
+
+GSE274606_norm_counts_LEf_transpose_meta<-GSE274606_norm_counts_LEf_transpose %>% left_join(metadata_274606, by = c("rowname"="X1"))
+
+#plotting
+
+GSE274606_norm_counts_LEf_transpose_meta %>%
+  ggplot(aes(x = `LEF1-AS1`, y = LEF1)) +
+  geom_point(aes(col = as.character(Day)),alpha = 0.8) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() #+
+ # facet_wrap(~Day, ncol = 1)
+
+cowplot::ggsave2("iza_figures/GSE274606_Corrplot_all_LEF_LEF-AS1.pdf", height = 5, width = 6)
+
+
+GSE274606_norm_counts_LEf_transpose_meta_long <-GSE274606_norm_counts_LEf_transpose_meta %>%pivot_longer(names_to = "gene", values_to = "counts", cols = c("LEF1", "LEF1-AS1"))
+
+
+GSE274606_norm_counts_LEf_transpose_meta_long %>%
+  ggplot(aes(x = as.character(Day), y = counts)) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(aes(), alpha = 0.4)+
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/GSE274606_Boxplot_all_LEF_LEF-AS1_nocolors.pdf", height = 6, width = 3)
+
+```
+
+Other influenza
+
+```{r}
+gn_toid
+
+readcount_combined_counts_influ_2 <- read_table("GSE196793/GSE196793_htseq_counts.txt")
+
+sample_names<-colnames(readcount_combined_counts_influ_2)[-1]
+
+metadata_196793<-data.frame(X1 = colnames(readcount_combined_counts_influ_2)[-1], X2 = colnames(readcount_combined_counts_influ_2)[-1])
+
+metadata_196793 <- metadata_196793 %>%
+  separate(X2, into = c("Part1", "Day"), sep = "-")
+
+gn_toid$gene_id <- sub("\\..*", "", gn_toid$gene_id)
+
+GSE196793_norm_counts<-readcount_combined_counts_influ_2 %>% left_join(gn_toid, by = c("ensembl_gene_id"="gene_id"))
+
+GSE196793_norm_counts_LEf<-GSE196793_norm_counts %>% filter(gene_name %in% c("LEF1", "LEF1-AS1"))
+
+GSE196793_norm_counts_LEf_filt<-GSE196793_norm_counts_LEf %>% dplyr::select(2:85)
+
+rownames(GSE196793_norm_counts_LEf_filt) <- GSE196793_norm_counts_LEf$gene_name
+
+GSE196793_norm_counts_LEf_transpose<-as.data.frame(t(GSE196793_norm_counts_LEf_filt))
+
+GSE196793_norm_counts_LEf_transpose<-rownames_to_column(GSE196793_norm_counts_LEf_transpose)
+
+GSE196793_norm_counts_LEf_transpose_meta<-GSE196793_norm_counts_LEf_transpose %>% left_join(metadata_196793, by = c("rowname"="X1"))
+
+
+#plotting
+
+GSE196793_norm_counts_LEf_transpose_meta %>%
+  ggplot(aes(x = `LEF1-AS1`, y = LEF1)) +
+  geom_point(aes(col = as.character(Day)),alpha = 0.8) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() #+
+ # facet_wrap(~Day, ncol = 1)
+
+cowplot::ggsave2("iza_figures/GSE196793_Corrplot_all_LEF_LEF-AS1.pdf", height = 5, width = 6)
+
+
+GSE196793_norm_counts_LEf_transpose_meta_long <-GSE196793_norm_counts_LEf_transpose_meta %>%pivot_longer(names_to = "gene", values_to = "counts", cols = c("LEF1", "LEF1-AS1"))
+
+
+GSE196793_norm_counts_LEf_transpose_meta_long %>%
+  ggplot(aes(x = as.character(Day), y = counts)) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(aes(), alpha = 0.4)+
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/GSE196793_Boxplot_all_LEF_LEF-AS1_nocolors.pdf", height = 6, width = 3)
+
+```
+
+Other influenza
+
+
+```{r}
+gn_toid
+
+readcount_combined_counts_influ_3 <- read_table("GSE186006/GSE186006_htseq_counts.txt")
+
+sample_names<-colnames(readcount_combined_counts_influ_3)[-1]
+
+metadata_186006<-data.frame(X1 = colnames(readcount_combined_counts_influ_3)[-1], X2 = colnames(readcount_combined_counts_influ_3)[-1])
+
+metadata_186006 <- metadata_186006 %>%
+  separate(X2, into = c("Part1", "Day"), sep = "_")
+
+GSE186006_norm_counts<-readcount_combined_counts_influ_3 %>% left_join(gn_toid, by = c("ensembl_gene_id"="gene_id"))
+
+GSE186006_norm_counts_LEf<-GSE186006_norm_counts %>% filter(gene_name %in% c("LEF1", "LEF1-AS1"))
+
+GSE186006_norm_counts_LEf_filt<-GSE186006_norm_counts_LEf %>% dplyr::select(2:33)
+
+rownames(GSE186006_norm_counts_LEf_filt) <- GSE186006_norm_counts_LEf$gene_name
+
+GSE186006_norm_counts_LEf_transpose<-as.data.frame(t(GSE186006_norm_counts_LEf_filt))
+
+GSE186006_norm_counts_LEf_transpose<-rownames_to_column(GSE186006_norm_counts_LEf_transpose)
+
+GSE186006_norm_counts_LEf_transpose_meta<-GSE186006_norm_counts_LEf_transpose %>% left_join(metadata_186006, by = c("rowname"="X1"))
+
+
+#plotting
+
+GSE186006_norm_counts_LEf_transpose_meta %>%
+  ggplot(aes(x = `LEF1-AS1`, y = LEF1)) +
+  geom_point(aes(col = as.character(Day)),alpha = 0.8) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() #+
+ # facet_wrap(~Day, ncol = 1)
+
+cowplot::ggsave2("iza_figures/GSE186006_Corrplot_all_LEF_LEF-AS1.pdf", height = 5, width = 6)
+
+
+GSE186006_norm_counts_LEf_transpose_meta_long <-GSE186006_norm_counts_LEf_transpose_meta %>% pivot_longer(names_to = "gene", values_to = "counts", cols = c("LEF1", "LEF1-AS1"))
+
+
+GSE186006_norm_counts_LEf_transpose_meta_long %>%
+  ggplot(aes(x = as.character(Day), y = counts)) +
+  geom_boxplot(alpha = 0.8) +
+  geom_jitter(aes(), alpha = 0.4)+
+  theme_bw() +
+  facet_wrap(~gene, ncol = 1, scales = "free_y")
+
+cowplot::ggsave2("iza_figures/GSE186006_Boxplot_all_LEF_LEF-AS1_nocolors.pdf", height = 6, width = 3)
+
+```
